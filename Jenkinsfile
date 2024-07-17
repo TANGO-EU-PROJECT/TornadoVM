@@ -46,12 +46,12 @@ void buildAndTest(String JDK, String tornadoProfile) {
     stage('TornadoVM Tests') {
         timeout(time: 12, unit: 'MINUTES') {
             sh 'tornado --devices'
-            sh '${TORNADO_DOCKER_SCRIPT}/dynamic-intelligent-execution-intel.sh tornado-test -V uk.ac.manchester.tornado.unittests.profiler.TestProfiler'
+            sh '${TORNADO_DOCKER_SCRIPT}/dynamic-intelligent-execution-intel.sh --test'
         }
     }
     stage("TornadoVM Integration Tests (Java-Python)") {
         timeout(time: 12, unit: 'MINUTES') {
-            sh 'cd ${TORNADO_DOCKER_SCRIPT} && ${TORNADO_DOCKER_SCRIPT}/dynamic-intelligent-execution-intel.sh tornado --truffle python example/polyglot-examples/kmeans.py'
+            sh 'cd ${TORNADO_DOCKER_SCRIPT} && ${TORNADO_DOCKER_SCRIPT}/dynamic-intelligent-execution-intel.sh --test_integration'
         }
     }
 }
