@@ -14,7 +14,10 @@ pipeline {
         TORNADO_DOCKER_SCRIPT="/var/lib/jenkins/docker-tornado"
     }
     stages {
-        stage('Prepare build') {
+        stage('Pull the Dynamic-Intelligent-Execution container') {
+            sh "docker pull beehivelab/tornadovm-polyglot-graalpy-23.1.0-oneapi-intel-container:tango"
+        }
+        stage('Prepare build and test') {
             steps {
                 script {
                     runJDK21()
