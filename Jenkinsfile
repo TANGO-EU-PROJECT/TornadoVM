@@ -10,12 +10,12 @@ pipeline {
     }
 
     environment {
-        GRAALVM_21_JAVA_HOME="/opt/jenkins/jdks/graal-23.1.0/graalvm-community-openjdk-21.0.1+12.1"
-        TORNADO_ROOT="/var/lib/jenkins/workspace/TornadoVM-pipeline"
-        PATH="/opt/maven/bin:/var/lib/jenkins/workspace/TornadoVM-pipeline/bin/bin:$PATH"
-        TORNADO_SDK="/var/lib/jenkins/workspace/TornadoVM-pipeline/bin/sdk"
-        CMAKE_ROOT="/opt/jenkins/cmake-3.25.2-linux-x86_64"
-        TORNADO_DOCKER_SCRIPT="/var/lib/jenkins/docker-tornado"
+        GRAALVM_21_JAVA_HOME="/var/lib/jenkins/workspace/TornadoVM/dependencies/jdks/graal-23.1.0/graalvm-community-openjdk-21.0.1+12.1"
+        TORNADO_ROOT="/var/lib/jenkins/workspace/TornadoVM/TornadoVM-pipeline"
+        PATH="/opt/maven/bin:/var/lib/jenkins/workspace/TornadoVM/TornadoVM-pipeline/bin/bin:$PATH"
+        TORNADO_SDK="/var/lib/jenkins/workspace/TornadoVM/TornadoVM-pipeline/bin/sdk"
+        CMAKE_ROOT="/var/lib/jenkins/workspace/TornadoVM/dependencies/cmake/cmake-3.25.2-linux-x86_64"
+        TORNADO_DOCKER_SCRIPT="/var/lib/jenkins/workspace/TornadoVM/dependencies/docker-tornadovm"
     }
     stages {
         stage('Pull the Dynamic-Intelligent-Execution container') {
