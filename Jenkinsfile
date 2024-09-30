@@ -17,7 +17,7 @@ pipeline {
         CMAKE_ROOT="/var/lib/jenkins/workspace/TornadoVM/dependencies/cmake/cmake-3.25.2-linux-x86_64"
         TORNADO_DOCKER_SCRIPT="/var/lib/jenkins/workspace/TornadoVM/dependencies/docker-tornadovm"
         DOCKER_IMAGE_REGISTRY="beehivelab/tornadovm-polyglot-graalpy-23.1.0-oneapi-intel-container"
-        DOCKER_IMAGE_TAG="tango"
+        DOCKER_IMAGE_TAG="tango-v1.0.8"
     }
     stages {
         stage('Pull the Dynamic-Intelligent-Execution container') {
