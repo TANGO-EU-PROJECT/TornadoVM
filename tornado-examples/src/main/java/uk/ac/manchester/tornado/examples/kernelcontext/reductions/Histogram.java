@@ -52,7 +52,7 @@ public class Histogram {
         setInputs(inputData, numberOfBins);
     }
 
-    private static int[] createDataPoints(int numDataPoints, int numberOfBins) {
+    public static int[] createDataPoints(int numDataPoints, int numberOfBins) {
         Random rand = new Random();
         int[] inputData = new int[numDataPoints];
         // Initialize input data with random numbers
