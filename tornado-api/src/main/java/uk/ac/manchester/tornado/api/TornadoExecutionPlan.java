@@ -17,32 +17,38 @@
  */
 package uk.ac.manchester.tornado.api;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 
 import uk.ac.manchester.tornado.api.common.TornadoDevice;
 import uk.ac.manchester.tornado.api.enums.ProfilerMode;
 import uk.ac.manchester.tornado.api.enums.TornadoVMBackendType;
 import uk.ac.manchester.tornado.api.exceptions.TornadoExecutionPlanException;
+import uk.ac.manchester.tornado.api.exceptions.TornadoRuntimeException;
 import uk.ac.manchester.tornado.api.plan.types.OffConcurrentDevices;
 import uk.ac.manchester.tornado.api.plan.types.OffMemoryLimit;
 import uk.ac.manchester.tornado.api.plan.types.OffPrintKernel;
 import uk.ac.manchester.tornado.api.plan.types.OffProfiler;
 import uk.ac.manchester.tornado.api.plan.types.OffThreadInfo;
-import uk.ac.manchester.tornado.api.plan.types.WithWarmUp;
+import uk.ac.manchester.tornado.api.plan.types.WithAllGraphs;
 import uk.ac.manchester.tornado.api.plan.types.WithBatch;
 import uk.ac.manchester.tornado.api.plan.types.WithClearProfiles;
 import uk.ac.manchester.tornado.api.plan.types.WithCompilerFlags;
 import uk.ac.manchester.tornado.api.plan.types.WithConcurrentDevices;
 import uk.ac.manchester.tornado.api.plan.types.WithDefaultScheduler;
-import uk.ac.manchester.tornado.api.plan.types.WithDevicePlan;
+import uk.ac.manchester.tornado.api.plan.types.WithDevice;
 import uk.ac.manchester.tornado.api.plan.types.WithDynamicReconfiguration;
 import uk.ac.manchester.tornado.api.plan.types.WithFreeDeviceMemory;
+import uk.ac.manchester.tornado.api.plan.types.WithGraph;
 import uk.ac.manchester.tornado.api.plan.types.WithGridScheduler;
 import uk.ac.manchester.tornado.api.plan.types.WithMemoryLimit;
 import uk.ac.manchester.tornado.api.plan.types.WithPrintKernel;
 import uk.ac.manchester.tornado.api.plan.types.WithProfiler;
 import uk.ac.manchester.tornado.api.plan.types.WithResetDevice;
 import uk.ac.manchester.tornado.api.plan.types.WithThreadInfo;
+import uk.ac.manchester.tornado.api.plan.types.WithWarmUp;
 import uk.ac.manchester.tornado.api.runtime.ExecutorFrame;
 import uk.ac.manchester.tornado.api.runtime.TornadoRuntimeProvider;
 
@@ -74,21 +80,22 @@ public sealed class TornadoExecutionPlan implements AutoCloseable permits Execut
 
     protected ExecutorFrame executionFrame;
 
-    // Pointers
     /**
-     * Pointer to the Root of the List
+     * Reference to the Root of the List.
      */
     protected TornadoExecutionPlan rootNode;
 
     /**
-     * Pointer to the next node in the list
+     * Reference to the next node in the list.
      */
     protected TornadoExecutionPlan childLink;
 
     /**
-     * Pointer to the previous node in the list
+     * Reference to the previous node in the list.
      */
     protected TornadoExecutionPlan parentLink;
+
+    protected List<TornadoExecutionResult> planResults;
 
     /**
      * Create an Execution Plan: Object to create and optimize an execution plan for
@@ -104,7 +111,25 @@ public sealed class TornadoExecutionPlan implements AutoCloseable permits Execut
         tornadoExecutor = new TornadoExecutor(immutableTaskGraphs);
         final long id = globalExecutionPlanCounter.incrementAndGet();
         executionFrame = new ExecutorFrame(id);
+        updateAccess(immutableTaskGraphs);
         rootNode = this;
+        planResults = new ArrayList<>();
+    }
+
+    /**
+     * If the {@code TornadoExecutionPlan} consists of multiple task-graphs, this function
+     * updates the access type of the input and output data of each task-graph, as necessary.
+     *
+     * @param immutableTaskGraphs The list of the immutable task-graphs in the {@code TornadoExecutionPlan}
+     */
+    private void updateAccess(ImmutableTaskGraph... immutableTaskGraphs) {
+        if (immutableTaskGraphs.length > 1) {
+            for (ImmutableTaskGraph immutableTaskGraph : immutableTaskGraphs) {
+                TaskGraph taskGraph = immutableTaskGraph.getTaskGraph();
+                TornadoTaskGraphInterface taskGraphImpl = taskGraph.getTaskGraphImpl();
+                taskGraphImpl.updateObjectAccess();
+            }
+        }
     }
 
     /**
@@ -152,8 +177,38 @@ public sealed class TornadoExecutionPlan implements AutoCloseable permits Execut
      */
     public TornadoExecutionResult execute() {
         tornadoExecutor.execute(executionFrame);
-        TornadoProfilerResult profilerResult = new TornadoProfilerResult(tornadoExecutor);
-        return new TornadoExecutionResult(profilerResult);
+        TornadoProfilerResult profilerResult = new TornadoProfilerResult(tornadoExecutor, this.getTraceExecutionPlan());
+        TornadoExecutionResult executionResult = new TornadoExecutionResult(profilerResult);
+        planResults.add(executionResult);
+        return executionResult;
+    }
+
+    /**
+     * Select a graph from the {@link TornadoExecutionPlan} to execute.
+     * This method allows developers to select a specific graph from the
+     * execution plan to launch. Developers can choose which graph from
+     * the input list to use (passed in the constructor).
+     *
+     * 
+     * @since 1.0.9
+     * @param graphIndex
+     * @return {@link TornadoExecutionPlan}
+     */
+    public TornadoExecutionPlan withGraph(int graphIndex) {
+        tornadoExecutor.selectGraph(graphIndex);
+        return new WithGraph(this, graphIndex);
+    }
+
+    /**
+     * Select all graphs from the {@link TornadoExecutionPlan}. This method
+     * has an effect if the {@link #withGraph(int)} method was invoked.
+     *
+     * @since 1.0.9
+     * @return {@link TornadoExecutionPlan}
+     */
+    public TornadoExecutionPlan withAllGraphs() {
+        tornadoExecutor.selectAll();
+        return new WithAllGraphs(this);
     }
 
     /**
@@ -175,7 +230,7 @@ public sealed class TornadoExecutionPlan implements AutoCloseable permits Execut
      */
     public TornadoExecutionPlan withDevice(TornadoDevice device) {
         tornadoExecutor.setDevice(device);
-        return new WithDevicePlan(this);
+        return new WithDevice(this, device);
     }
 
     /**
@@ -184,7 +239,7 @@ public sealed class TornadoExecutionPlan implements AutoCloseable permits Execut
      * @since 1.0.8
      */
     public void printTraceExecutionPlan() {
-        System.out.println(childLink);
+        System.out.println(Objects.requireNonNullElse(childLink, this));
     }
 
     /**
@@ -194,7 +249,10 @@ public sealed class TornadoExecutionPlan implements AutoCloseable permits Execut
      * @since 1.0.8
      */
     public String getTraceExecutionPlan() {
-        return childLink.toString();
+        if (childLink != null) {
+            return childLink.toString();
+        }
+        return toString();
     }
 
     @Override
@@ -215,7 +273,7 @@ public sealed class TornadoExecutionPlan implements AutoCloseable permits Execut
      */
     public TornadoExecutionPlan withDevice(String taskName, TornadoDevice device) {
         tornadoExecutor.setDevice(taskName, device);
-        return new WithDevicePlan(this);
+        return new WithDevice(this, device);
     }
 
     /**
@@ -285,7 +343,7 @@ public sealed class TornadoExecutionPlan implements AutoCloseable permits Execut
      */
     public TornadoExecutionPlan withGridScheduler(GridScheduler gridScheduler) {
         tornadoExecutor.withGridScheduler(gridScheduler);
-        return new WithGridScheduler(this);
+        return new WithGridScheduler(this, gridScheduler);
     }
 
     /**
@@ -310,7 +368,7 @@ public sealed class TornadoExecutionPlan implements AutoCloseable permits Execut
      */
     public TornadoExecutionPlan withDynamicReconfiguration(Policy policy, DRMode mode) {
         executionFrame.withPolicy(policy).withMode(mode);
-        return new WithDynamicReconfiguration(this);
+        return new WithDynamicReconfiguration(this, policy, mode);
     }
 
     /**
@@ -325,7 +383,7 @@ public sealed class TornadoExecutionPlan implements AutoCloseable permits Execut
      */
     public TornadoExecutionPlan withBatch(String batchSize) {
         tornadoExecutor.withBatch(batchSize);
-        return new WithBatch(this);
+        return new WithBatch(this, batchSize);
     }
 
     /**
@@ -339,7 +397,7 @@ public sealed class TornadoExecutionPlan implements AutoCloseable permits Execut
      */
     public TornadoExecutionPlan withProfiler(ProfilerMode profilerMode) {
         executionFrame.withProfilerOn(profilerMode);
-        return new WithProfiler(this);
+        return new WithProfiler(this, profilerMode);
     }
 
     /**
@@ -365,7 +423,7 @@ public sealed class TornadoExecutionPlan implements AutoCloseable permits Execut
      */
     public TornadoExecutionPlan withMemoryLimit(String memoryLimit) {
         tornadoExecutor.withMemoryLimit(memoryLimit);
-        return new WithMemoryLimit(this);
+        return new WithMemoryLimit(this, memoryLimit);
     }
 
     /**
@@ -480,7 +538,7 @@ public sealed class TornadoExecutionPlan implements AutoCloseable permits Execut
      */
     public TornadoExecutionPlan withCompilerFlags(TornadoVMBackendType backend, String compilerFlags) {
         tornadoExecutor.withCompilerFlags(backend, compilerFlags);
-        return new WithCompilerFlags(this);
+        return new WithCompilerFlags(this, compilerFlags);
     }
 
     /**
@@ -502,6 +560,37 @@ public sealed class TornadoExecutionPlan implements AutoCloseable permits Execut
      */
     public long getCurrentDeviceMemoryUsage() {
         return tornadoExecutor.getCurrentDeviceMemoryUsage();
+    }
+
+    public TornadoExecutionResult getPlanResult(int index) {
+        if (index >= planResults.size()) {
+            throw new TornadoRuntimeException("[ERROR] Execution result not found");
+        }
+        return planResults.get(index);
+    }
+
+    /**
+     * This function maps the device memory region that corresponds to a TornadoVM object to another on-device memory region.
+     * This call instructs the TornadoVM runtime to avoid transferring data between `device` -> `host` -> `device`. Instead,
+     * it can update the corresponding device pointers.
+     *
+     * <p>
+     * The semantics are as follows: there is the source object, and the destination object. This call maps the dest object
+     * to the source object from a given offset. The source object is passed from the task-graph `fromGraphIndex`, and
+     * the destination object is taken from the `toGraphIndex`. This method can be invoked in a multi-task-graph execution
+     * plan. It will not work if there is only one task-graph in the execution plan.
+     * </p>
+     * 
+     * @param destTornadoArray
+     * @param srcTornadoArray
+     * @param offset
+     * @param fromGraphIndex
+     * @param toGraphIndex
+     *
+     * @since v1.1.0
+     */
+    public void mapOnDeviceMemoryRegion(Object destTornadoArray, Object srcTornadoArray, long offset, int fromGraphIndex, int toGraphIndex) {
+        tornadoExecutor.mapOnDeviceMemoryRegion(destTornadoArray, srcTornadoArray, offset, fromGraphIndex, toGraphIndex);
     }
 
 }

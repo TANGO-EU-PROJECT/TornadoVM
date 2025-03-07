@@ -448,6 +448,7 @@ public class PTXAssembler extends Assembler {
         public static final PTXNullaryOp STU = new PTXNullaryOp("stu");
         public static final PTXNullaryOp RETURN = new PTXNullaryOp("ret");
         public static final PTXNullaryOp CVTA = new PTXNullaryOp(CONVERT_ADDRESS);
+        public static final PTXNullaryOp ATOM = new PTXNullaryOp("atom");
 
         protected PTXNullaryOp(String opcode) {
             this(opcode, false);
@@ -489,7 +490,7 @@ public class PTXAssembler extends Assembler {
      * Unary opcodes
      */
     public static class PTXUnaryOp extends PTXOp {
-        public static final PTXUnaryOp NOT = new PTXUnaryOp("not", true, ROUND_NEAREST_EVEN);
+        public static final PTXUnaryOp NOT = new PTXUnaryOp("not", true, null);
         public static final PTXUnaryOp NEGATE = new PTXUnaryOp("neg", false, null);
         public static final PTXUnaryOp MOV = new PTXUnaryOp(MOVE, false, null);
         public static final PTXUnaryOp CVT_FLOAT_RNE = new PTXUnaryOp(CONVERT, false, ROUND_NEAREST_EVEN);
