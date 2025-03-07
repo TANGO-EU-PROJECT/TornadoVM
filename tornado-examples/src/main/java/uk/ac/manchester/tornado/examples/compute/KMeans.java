@@ -18,11 +18,11 @@
 
 package uk.ac.manchester.tornado.examples.compute;
 
-import uk.ac.manchester.tornado.api.ImmutableTaskGraph;
 import uk.ac.manchester.tornado.api.TaskGraph;
 import uk.ac.manchester.tornado.api.TornadoExecutionPlan;
 import uk.ac.manchester.tornado.api.annotations.Parallel;
 import uk.ac.manchester.tornado.api.enums.DataTransferMode;
+import uk.ac.manchester.tornado.api.exceptions.TornadoExecutionPlanException;
 import uk.ac.manchester.tornado.api.math.TornadoMath;
 import uk.ac.manchester.tornado.api.types.collections.VectorFloat2;
 import uk.ac.manchester.tornado.api.types.collections.VectorInt;
@@ -320,12 +320,15 @@ public class KMeans {
                 .transferToHost(DataTransferMode.EVERY_EXECUTION, clusters);
 
         // 2. Create an execution plan
-        ImmutableTaskGraph immutableTaskGraph = taskGraph.snapshot();
-        TornadoExecutionPlan executionPlan = new TornadoExecutionPlan(immutableTaskGraph);
+        TornadoExecutionPlan executionPlan = new TornadoExecutionPlan(taskGraph.snapshot());
 
-        // 3. Execute the plan - KMeans Clustering Algorithm
+        // 3. Execute the plan - KMeans Clustering Algorithm with TornadoVM
         long start = System.nanoTime();
-        executionPlan.execute();
+        try (executionPlan) {
+            executionPlan.execute();
+        } catch (TornadoExecutionPlanException e) {
+            throw new RuntimeException(e);
+        }
 
         // 3.1 Recalculate centroids of clusters while the centroids list change between iterations.
         boolean centroidsChanged = true;
@@ -334,7 +337,11 @@ public class KMeans {
             centroidsChanged = updateCentroids(dataPoints, clusters, centroid);
             if (centroidsChanged) {
                 // If there are new changes, then the clusters are re-assigned
-                executionPlan.execute();
+                try (executionPlan) {
+                    executionPlan.execute();
+                } catch (TornadoExecutionPlanException e) {
+                    throw new RuntimeException(e);
+                }
             }
         }
         long end = System.nanoTime();
