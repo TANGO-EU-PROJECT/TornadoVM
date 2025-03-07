@@ -20,14 +20,15 @@ package uk.ac.manchester.tornado.api.plan.types;
 import uk.ac.manchester.tornado.api.ExecutionPlanType;
 import uk.ac.manchester.tornado.api.TornadoExecutionPlan;
 
-public final class WithDevicePlan extends ExecutionPlanType {
+public final class WithAllGraphs extends ExecutionPlanType {
 
-    public WithDevicePlan(TornadoExecutionPlan parent) {
+    public WithAllGraphs(TornadoExecutionPlan parent) {
         super(parent);
     }
 
     @Override
     public String toString() {
-        return parentLink.toString() + "\n -> withDevice ";
+        return parentLink.toString() + "\n -> withAllGraphs ";
     }
+
 }
