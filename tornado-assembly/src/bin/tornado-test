@@ -30,6 +30,7 @@ from abc import abstractmethod
 from builtins import staticmethod, isinstance
 from typing import Union, Optional
 
+
 # ################################################################################################################
 ## Monitor classes
 # ################################################################################################################
@@ -102,9 +103,11 @@ class OutOfMemoryMonitorClass(MonitorClass):
             time.sleep(1)
         return True
 
+
 MONITOR_REGISTRY = {
     "outOfMemoryMonitor": OutOfMemoryMonitorClass,
 }
+
 
 # ################################################################################################################
 
@@ -300,6 +303,9 @@ __TORNADO_TESTS_WHITE_LIST__ = [
     "uk.ac.manchester.tornado.unittests.compute.ComputeTests#testMandelbrot",
     "uk.ac.manchester.tornado.unittests.compute.ComputeTests#testJuliaSets",
 
+    ## Inconsistent results that occur in some NVIDIA drivers
+    "uk.ac.manchester.tornado.unittests.branching.TestLoopConditions#testConditionBeforeSingleLoopReturn",
+
     ## For the OpenCL Backend
     "uk.ac.manchester.tornado.unittests.foundation.TestIf#test06",
 
@@ -370,7 +376,7 @@ else:
 
 ENABLE_ASSERTIONS = "-ea "
 
-__VERSION__ = "1.1.0-dev"
+__VERSION__ = "1.1.0"
 
 try:
     javaHome = os.environ["JAVA_HOME"]
