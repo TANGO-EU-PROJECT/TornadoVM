@@ -39,9 +39,28 @@ import java.util.Random;
  */
 public class Histogram {
 
-    private static final int NUM_BINS = 4;
-    private static int BLOCK_SIZE = 256;
+    private static int numBins = 4;
+    private static int blockSize = 256;
     private static int size = 256;
+
+    private static IntArray dataPoints;
+    private static IntArray histDataTornado;
+    private static IntArray histDataJava;
+
+    public Histogram(int size, int numberOfBins) {
+        int[] inputData = createDataPoints(size, numberOfBins);
+        setInputs(inputData, numberOfBins);
+    }
+
+    public static int[] createDataPoints(int numDataPoints, int numberOfBins) {
+        Random rand = new Random();
+        int[] inputData = new int[numDataPoints];
+        // Initialize input data with random numbers
+        for (int i = 0; i < numDataPoints; i++) {
+            inputData[i] = rand.nextInt(numberOfBins);
+        }
+        return inputData;
+    }
 
     /**
      * This method implements the following CUDA kernel with the TornadoVM Kernel API.
@@ -75,56 +94,83 @@ public class Histogram {
         }
     }
 
+    public static void setInputs(int[] inputData, int numberOfBins) {
+        dataPoints = IntArray.fromArray(inputData);
+        histDataTornado = new IntArray(inputData.length);
+        histDataJava = new IntArray(inputData.length);
+        numBins = numberOfBins;
+    }
+
+    public static void setBlockSize(int blockSize) {
+        Histogram.blockSize = blockSize;
+    }
+
+    public static IntArray runWithGPU() {
+        // 1. Create a TaskGraph for the assign cluster method
+        KernelContext context = new KernelContext();
+        WorkerGrid workerGrid = new WorkerGrid1D(size);
+        workerGrid.setGlobalWork(size, 1, 1);
+        workerGrid.setLocalWork(blockSize, 1, 1);
+        GridScheduler gridScheduler = new GridScheduler("s0.t0", workerGrid);
+
+        TaskGraph taskGraph = new TaskGraph("s0") //
+                .transferToDevice(DataTransferMode.EVERY_EXECUTION, dataPoints) //
+                .task("t0", Histogram::histogramKernel, context, dataPoints, histDataTornado) //
+                .transferToHost(DataTransferMode.EVERY_EXECUTION, histDataTornado); //
+
+        // 2. Create an execution plan
+        TornadoExecutionPlan executionPlan = new TornadoExecutionPlan(taskGraph.snapshot());
+
+        // 3. Execute the plan - histogram with TornadoVM
+        long start = System.nanoTime();
+        try (executionPlan) {
+            executionPlan.withGridScheduler(gridScheduler).execute();
+        } catch (TornadoExecutionPlanException e) {
+            throw new RuntimeException(e);
+        }
+        long end = System.nanoTime();
+        System.out.println("Total time of TornadoVM execution: " + (end - start) + " (nanoseconds)");
+
+        return histDataTornado;
+    }
+
+    public static IntArray runWithJava() {
+        // Run histogram in Java
+        KernelContext context = new KernelContext();
+
+        long start = System.nanoTime();
+        histogram(context, dataPoints, histDataJava);
+        long end = System.nanoTime();
+
+        System.out.println("Total time of Java execution: " + (end - start) + " (nanoseconds)");
+
+        return histDataJava;
+    }
+
     public static void main(String[] args) throws TornadoExecutionPlanException {
         if (args.length == 1) {
             size = Integer.parseInt(args[0]);
         } else if (args.length == 2) {
             size = Integer.parseInt(args[0]);
-            BLOCK_SIZE = Integer.parseInt(args[1]);
+            setBlockSize(Integer.parseInt(args[1]));
         }
 
-        Random rand = new Random();
-        IntArray inputData = new IntArray(size);
-        IntArray histDataTornado = new IntArray(size);
-        IntArray histDataJava = new IntArray(size);
+        Histogram histogram = new Histogram(size, numBins);
+        IntArray javaHistData = histogram.runWithJava();
+        IntArray tornadoHistData = histogram.runWithGPU();
 
-        // Initialize input data with random numbers
-        for (int i = 0; i < size; i++) {
-            inputData.set(i, rand.nextInt(NUM_BINS));
-        }
-        inputData.init(2);
+        final boolean valid = validate(tornadoHistData, javaHistData);
 
-        KernelContext context = new KernelContext();
-        WorkerGrid workerGrid = new WorkerGrid1D(size);
-        workerGrid.setGlobalWork(size, 1, 1);
-        workerGrid.setLocalWork(BLOCK_SIZE, 1, 1);
-        GridScheduler gridScheduler = new GridScheduler("s0.t0", workerGrid);
-
-        TaskGraph taskGraph = new TaskGraph("s0") //
-                .transferToDevice(DataTransferMode.EVERY_EXECUTION, inputData) //
-                .task("t0", Histogram::histogramKernel, context, inputData, histDataTornado) //
-                .transferToHost(DataTransferMode.EVERY_EXECUTION, histDataTornado); //
-
-        // Run histogram with TornadoVM
-        try (TornadoExecutionPlan executionPlan = new TornadoExecutionPlan(taskGraph.snapshot())) {
-            executionPlan.withGridScheduler(gridScheduler).execute();
-        }
-
-        // Run histogram in Java
-        histogram(context, inputData, histDataJava);
-
-        final boolean validation = validate(histDataTornado, histDataJava);
-
-        if (validation) {
-            System.out.println("Validation [PASSED].");
+        if (!valid) {
+            System.out.println(" ................ [FAIL]");
         } else {
-            System.out.println("Validation [FAILED].");
+            System.out.println(" ................ [PASS]");
         }
     }
 
     private static boolean validate(IntArray histDataTornado, IntArray histDataJava) {
         int counter = 0;
-        for (int i = 0; i < NUM_BINS + 1; i++) {
+        for (int i = 0; i < numBins + 1; i++) {
             counter += histDataTornado.get(i);
             if (histDataJava.get(i) != histDataTornado.get(i)) {
                 System.out.println("[FAIL] histDataJava.get(" + i + "): " + histDataJava.get(i) + " - histDataTornado.get(" + i + "): " + histDataTornado.get(i));
