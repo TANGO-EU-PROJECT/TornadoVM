@@ -95,6 +95,7 @@ public class Histogram {
     }
 
     public static void setInputs(int[] inputData, int numberOfBins) {
+        size = inputData.length;
         dataPoints = IntArray.fromArray(inputData);
         histDataTornado = new IntArray(inputData.length);
         histDataJava = new IntArray(inputData.length);
