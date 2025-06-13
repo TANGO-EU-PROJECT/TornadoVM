@@ -150,7 +150,11 @@ public class Histogram {
     }
 
     public static int[] fromList(List<Integer> list) {
-        return list.stream().mapToInt(Integer::intValue).toArray();
+        int[] result = new int[list.size()];
+        for (int i = 0; i < list.size(); i++) {
+            result[i] = list.get(i);
+        }
+        return result;
     }
 
     public static void main(String[] args) throws TornadoExecutionPlanException {

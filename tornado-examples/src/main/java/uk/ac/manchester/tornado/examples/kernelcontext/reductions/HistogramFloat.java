@@ -150,10 +150,10 @@ public class HistogramFloat {
         return histDataJava;
     }
 
-    public static float[] fromList(List<Float> list) {
+    public static float[] fromList(List<? extends Number> list) {
         float[] result = new float[list.size()];
         for (int i = 0; i < list.size(); i++) {
-            result[i] = list.get(i);
+            result[i] = list.get(i).floatValue();
         }
         return result;
     }
