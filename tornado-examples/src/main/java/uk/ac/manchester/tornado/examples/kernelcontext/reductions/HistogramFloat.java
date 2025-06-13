@@ -25,6 +25,7 @@ import uk.ac.manchester.tornado.api.WorkerGrid;
 import uk.ac.manchester.tornado.api.WorkerGrid1D;
 import uk.ac.manchester.tornado.api.enums.DataTransferMode;
 import uk.ac.manchester.tornado.api.exceptions.TornadoExecutionPlanException;
+import uk.ac.manchester.tornado.api.types.arrays.FloatArray;
 import uk.ac.manchester.tornado.api.types.arrays.IntArray;
 
 import java.util.List;
@@ -35,30 +36,30 @@ import java.util.Random;
  * How to run?
  * </p>
  * <code>
- * $ tornado --threadInfo -m tornado.examples/uk.ac.manchester.tornado.examples.kernelcontext.reductions.Histogram 1024 256
+ * $ tornado --threadInfo -m tornado.examples/uk.ac.manchester.tornado.examples.kernelcontext.reductions.HistogramFloat 1024 256
  * </code>
  */
-public class Histogram {
+public class HistogramFloat {
 
     private static int numBins = 4;
     private static int blockSize = 256;
     private static int size = 256;
 
-    private static IntArray dataPoints;
-    private static IntArray histDataTornado;
-    private static IntArray histDataJava;
+    private static FloatArray dataPoints;
+    private static FloatArray histDataTornado;
+    private static FloatArray histDataJava;
 
-    public Histogram(int size, int numberOfBins) {
-        int[] inputData = createDataPoints(size, numberOfBins);
+    public HistogramFloat(int size, int numberOfBins) {
+        float[] inputData = createDataPoints(size, numberOfBins);
         setInputs(inputData, numberOfBins);
     }
 
-    public static int[] createDataPoints(int numDataPoints, int numberOfBins) {
+    public static float[] createDataPoints(int numDataPoints, int numberOfBins) {
         Random rand = new Random();
-        int[] inputData = new int[numDataPoints];
+        float[] inputData = new float[numDataPoints];
         // Initialize input data with random numbers
         for (int i = 0; i < numDataPoints; i++) {
-            inputData[i] = rand.nextInt(numberOfBins);
+            inputData[i] = rand.nextFloat(numberOfBins);
         }
         return inputData;
     }
@@ -78,36 +79,36 @@ public class Histogram {
      * @param input
      * @param output
      */
-    public static void histogramKernel(KernelContext context, IntArray input, IntArray output) {
+    public static void histogramKernel(KernelContext context, FloatArray input, FloatArray output) {
         int tid = context.globalIdx;
 
         if (tid < input.getSize()) {
-            int index = input.get(tid);
+            int index = (int) input.get(tid);
             context.atomicAdd(output, index, 1);
         }
     }
 
-    public static void histogram(KernelContext context, IntArray input, IntArray output) {
+    public static void histogram(KernelContext context, FloatArray input, FloatArray output) {
         for (int tid = 0; tid < input.getSize(); tid++) {
-            int index = input.get(tid);
+            int index = (int) input.get(tid);
             context.atomicAdd(output, index, 1);
             output.set(index, output.get(index));
         }
     }
 
-    public static void setInputs(int[] inputData, int numberOfBins) {
+    public static void setInputs(float[] inputData, int numberOfBins) {
         size = inputData.length;
-        dataPoints = IntArray.fromArray(inputData);
-        histDataTornado = new IntArray(inputData.length);
-        histDataJava = new IntArray(inputData.length);
+        dataPoints = FloatArray.fromArray(inputData);
+        histDataTornado = new FloatArray(inputData.length);
+        histDataJava = new FloatArray(inputData.length);
         numBins = numberOfBins;
     }
 
     public static void setBlockSize(int blockSize) {
-        Histogram.blockSize = blockSize;
+        HistogramFloat.blockSize = blockSize;
     }
 
-    public static IntArray runWithGPU() {
+    public static FloatArray runWithGPU() {
         // 1. Create a TaskGraph for the assign cluster method
         KernelContext context = new KernelContext();
         WorkerGrid workerGrid = new WorkerGrid1D(size);
@@ -117,7 +118,7 @@ public class Histogram {
 
         TaskGraph taskGraph = new TaskGraph("s0") //
                 .transferToDevice(DataTransferMode.EVERY_EXECUTION, dataPoints) //
-                .task("t0", Histogram::histogramKernel, context, dataPoints, histDataTornado) //
+                .task("t0", HistogramFloat::histogramKernel, context, dataPoints, histDataTornado) //
                 .transferToHost(DataTransferMode.EVERY_EXECUTION, histDataTornado); //
 
         // 2. Create an execution plan
@@ -136,7 +137,7 @@ public class Histogram {
         return histDataTornado;
     }
 
-    public static IntArray runWithJava() {
+    public static FloatArray runWithJava() {
         // Run histogram in Java
         KernelContext context = new KernelContext();
 
@@ -149,8 +150,12 @@ public class Histogram {
         return histDataJava;
     }
 
-    public static int[] fromList(List<Integer> list) {
-        return list.stream().mapToInt(Integer::intValue).toArray();
+    public static float[] fromList(List<Float> list) {
+        float[] result = new float[list.size()];
+        for (int i = 0; i < list.size(); i++) {
+            result[i] = list.get(i);
+        }
+        return result;
     }
 
     public static void main(String[] args) throws TornadoExecutionPlanException {
