@@ -53,7 +53,9 @@ import uk.ac.manchester.tornado.api.profiler.ProfilerType;
 import uk.ac.manchester.tornado.api.profiler.TornadoProfiler;
 import uk.ac.manchester.tornado.api.runtime.TaskContextInterface;
 import uk.ac.manchester.tornado.runtime.EmptyEvent;
+import uk.ac.manchester.tornado.runtime.common.BatchConfiguration;
 import uk.ac.manchester.tornado.runtime.common.KernelStackFrame;
+import uk.ac.manchester.tornado.runtime.common.RuntimeUtilities;
 import uk.ac.manchester.tornado.runtime.common.TornadoInstalledCode;
 import uk.ac.manchester.tornado.runtime.common.TornadoLogger;
 import uk.ac.manchester.tornado.runtime.common.TornadoOptions;
@@ -102,6 +104,9 @@ public class TornadoVMInterpreter {
 
     private GridScheduler gridScheduler;
 
+    private HashMap<Object, Integer> currentBatchNumberPerObject = new HashMap<>();
+    private HashMap<Object, Integer> totalEvenBatchesPerObject = new HashMap<>();
+
     private TornadoLogger logger = new TornadoLogger(this.getClass());
 
     /**
@@ -149,6 +154,7 @@ public class TornadoVMInterpreter {
         logger.debug("created %d event lists", events.length);
         objectAccesses = graphExecutionContext.getObjectsAccesses();
         objects = graphExecutionContext.getObjects();
+        initBatchDataStructures(graphExecutionContext);
         dataObjectStates = new DataObjectState[objects.size()];
         fetchGlobalStates();
 
@@ -160,6 +166,18 @@ public class TornadoVMInterpreter {
         logger.debug("interpreter for device %s is ready to go", device.toString());
 
         this.bytecodeResult.mark();
+    }
+
+    private void initBatchDataStructures(TornadoExecutionContext context) {
+        long batchSize = context.getBatchSize();
+        if (batchSize != -1) {
+            BatchConfiguration batchConfiguration = BatchConfiguration.computeChunkSizes(context, batchSize);
+            int totalChunks = batchConfiguration.getTotalChunks();
+            for (Object object : objects) {
+                totalEvenBatchesPerObject.put(object, totalChunks);
+                currentBatchNumberPerObject.put(object, 0);
+            }
+        }
     }
 
     public void setTimeProfiler(TornadoProfiler tornadoProfiler) {
@@ -235,7 +253,7 @@ public class TornadoVMInterpreter {
         }
     }
 
-    public void warmup() {
+    public void withPreCompilation() {
         execute(true);
         finishedWarmup = true;
     }
@@ -257,7 +275,7 @@ public class TornadoVMInterpreter {
         initWaitEventList();
 
         StringBuilder logBuilder = null;
-        if (TornadoOptions.PRINT_BYTECODES) {
+        if (TornadoOptions.LOG_BYTECODES() && !isWarmup) {
             logBuilder = new StringBuilder();
             logBuilder.append(InterpreterUtilities.debugHighLightHelper("Interpreter instance running bytecodes for: ")).append(interpreterDevice).append(InterpreterUtilities.debugHighLightHelper(
                     " Running in thread: ")).append(Thread.currentThread().getName()).append("\n");
@@ -344,13 +362,17 @@ public class TornadoVMInterpreter {
             } else if (op == TornadoVMBytecodes.ON_DEVICE.value()) {
                 final int objectIndex = bytecodeResult.getInt();
                 final int eventId = bytecodeResult.getInt();
-                final long offset = bytecodeResult.getLong();
-                final long sizeBatch = bytecodeResult.getLong();
-                final int[] waitList = (useDependencies && eventId != -1) ? events[eventId] : null;
                 if (isWarmup) {
                     continue;
                 }
                 lastEvent = executeOnDevice(logBuilder, objectIndex, eventId);
+            } else if (op == TornadoVMBytecodes.PERSIST.value()) {
+                final int objectIndex = bytecodeResult.getInt();
+                final int eventId = bytecodeResult.getInt();
+                if (isWarmup) {
+                    continue;
+                }
+                lastEvent = executePersist(logBuilder, objectIndex, eventId);
             } else if (op == TornadoVMBytecodes.BARRIER.value()) {
                 final int eventId = bytecodeResult.getInt();
                 final int[] waitList = (useDependencies && eventId != -1) ? events[eventId] : null;
@@ -359,7 +381,7 @@ public class TornadoVMInterpreter {
                 }
                 lastEvent = executeBarrier(logBuilder, eventId, waitList);
             } else if (op == TornadoVMBytecodes.END.value()) {
-                if (!isWarmup && TornadoOptions.PRINT_BYTECODES) {
+                if (!isWarmup && TornadoOptions.LOG_BYTECODES()) {
                     logBuilder.append("bc: ").append(InterpreterUtilities.debugHighLightBC("END\n")).append("\n");
                 }
                 break;
@@ -395,6 +417,10 @@ public class TornadoVMInterpreter {
 
         if (TornadoOptions.PRINT_BYTECODES) {
             System.out.println(logBuilder);
+        }
+
+        if (!TornadoOptions.DUMP_BYTECODES.isBlank()) {
+            RuntimeUtilities.writeBytecodeToFile(logBuilder);
         }
 
         return barrier;
@@ -470,16 +496,20 @@ public class TornadoVMInterpreter {
         }
 
         // total size of objects pre-allocated and current allocation
-        long allocationsTotalSize = interpreterDevice.allocateObjects(objects, sizeBatch, objectStates, accesses) + preAllocatedSizes;
+        long allocationSize = interpreterDevice.allocateObjects(objects, sizeBatch, objectStates, accesses);
+        long allocationsTotalSize = allocationSize + preAllocatedSizes;
+        increaseBatchNumber(sizeBatch);
 
         // Dump printing after object allocation, so the XPU-Buffer is created,
         // and we can query the size without having to use Java type analysis
         // to obtain the size at this point. 
-        if (TornadoOptions.PRINT_BYTECODES) {
+        if (TornadoOptions.LOG_BYTECODES()) {
             int objIndex = 0;
             for (XPUDeviceBufferState state : objectStates) {
                 long size = state.getXPUBuffer().size();
-                DebugInterpreter.logAllocObject(objects[objIndex], interpreterDevice, size, sizeBatch, logBuilder);
+                if (!state.isBufferReused()) {
+                    DebugInterpreter.logAllocObject(objects[objIndex], interpreterDevice, size, sizeBatch, logBuilder);
+                }
                 objIndex++;
             }
         }
@@ -487,7 +517,7 @@ public class TornadoVMInterpreter {
         graphExecutionContext.setCurrentDeviceMemoryUsage(allocationsTotalSize);
 
         // Register allocations values in the profiler only if the profiler is enabled
-        if (TornadoOptions.isProfilerEnabled()) {
+        if (TornadoOptions.isProfilerEnabled() && allocationSize > 0) {
             for (XPUDeviceBufferState objectState : objectStates) {
                 timeProfiler.addValueToMetric(ProfilerType.ALLOCATION_BYTES, TimeProfiler.NO_TASK_NAME, objectState.getXPUBuffer().size());
             }
@@ -495,14 +525,32 @@ public class TornadoVMInterpreter {
         return -1;
     }
 
+    private void increaseBatchNumber(long sizeBatch) {
+        if (sizeBatch != 0) {
+            for (Object object : objects) {
+                int previousBatch = currentBatchNumberPerObject.get(object);
+                currentBatchNumberPerObject.replace(object, previousBatch, ++previousBatch);
+            }
+        }
+    }
+
     private int executeDeAlloc(StringBuilder tornadoVMBytecodeList, final int objectIndex) {
         Object object = objects.get(objectIndex);
+
+        if (!currentBatchNumberPerObject.isEmpty() && !currentBatchNumberPerObject.isEmpty()) {
+            int currentBatchNumber = currentBatchNumberPerObject.get(object);
+            int totalNumberOfBatches = totalEvenBatchesPerObject.get(object);
+
+            if (currentBatchNumber < totalNumberOfBatches) {
+                return -1;
+            }
+        }
 
         final XPUDeviceBufferState objectState = resolveObjectState(objectIndex);
         long spaceDeallocated = interpreterDevice.deallocate(objectState);
         // Update current device area use
-        if (TornadoOptions.PRINT_BYTECODES && isNotObjectAtomic(object)) {
-            boolean materializeDealloc = spaceDeallocated == 0;
+        if (TornadoOptions.LOG_BYTECODES() && isNotObjectAtomic(object)) {
+            boolean materializeDealloc = spaceDeallocated != 0;
             DebugInterpreter.logDeallocObject(object, interpreterDevice, tornadoVMBytecodeList, materializeDealloc);
         }
         graphExecutionContext.setCurrentDeviceMemoryUsage(graphExecutionContext.getCurrentDeviceMemoryUsage() - spaceDeallocated);
@@ -511,8 +559,17 @@ public class TornadoVMInterpreter {
 
     private int executeOnDevice(StringBuilder logBuilder, final int objectIndex, final int eventId) {
         Object object = objects.get(objectIndex);
-        if (TornadoOptions.PRINT_BYTECODES) {
+        if (TornadoOptions.LOG_BYTECODES()) {
             DebugInterpreter.logOnDeviceObject(object, interpreterDevice, logBuilder);
+        }
+        resetEventIndexes(eventId);
+        return -1;
+    }
+
+    private int executePersist(StringBuilder logBuilder, final int objectIndex, final int eventId) {
+        Object object = objects.get(objectIndex);
+        if (TornadoOptions.PRINT_BYTECODES) {
+            DebugInterpreter.logPersistedObject(object, interpreterDevice, logBuilder);
         }
         resetEventIndexes(eventId);
         return -1;
@@ -536,7 +593,7 @@ public class TornadoVMInterpreter {
         }
         resetEventIndexes(eventId);
 
-        if (TornadoOptions.PRINT_BYTECODES && isNotObjectAtomic(object)) {
+        if (TornadoOptions.LOG_BYTECODES() && isNotObjectAtomic(object)) {
             long sizeObject = objectState.getXPUBuffer().size();
             DebugInterpreter.logTransferToDeviceOnce(allEvents, object, interpreterDevice, sizeObject, sizeBatch, offset, eventId, logBuilder);
         }
@@ -568,7 +625,7 @@ public class TornadoVMInterpreter {
 
         resetEventIndexes(eventId);
 
-        if (TornadoOptions.PRINT_BYTECODES && isNotObjectAtomic(object)) {
+        if (TornadoOptions.LOG_BYTECODES() && isNotObjectAtomic(object)) {
             long sizeObject = objectState.getXPUBuffer().size();
             DebugInterpreter.logTransferToDeviceAlways(object, interpreterDevice, sizeObject, sizeBatch, offset, eventId, logBuilder);
         }
@@ -598,7 +655,7 @@ public class TornadoVMInterpreter {
         }
 
         final XPUDeviceBufferState objectState = resolveObjectState(objectIndex);
-        if (TornadoOptions.PRINT_BYTECODES) {
+        if (TornadoOptions.LOG_BYTECODES()) {
             long sizeObject = objectState.getXPUBuffer().size();
             DebugInterpreter.logTransferToHostAlways(object, interpreterDevice, sizeObject, sizeBatch, offset, eventId, logBuilder);
         }
@@ -632,7 +689,7 @@ public class TornadoVMInterpreter {
         }
 
         final XPUDeviceBufferState objectState = resolveObjectState(objectIndex);
-        if (TornadoOptions.PRINT_BYTECODES) {
+        if (TornadoOptions.LOG_BYTECODES()) {
             long sizeOfObject = objectState.getXPUBuffer().size();
             DebugInterpreter.logTransferToHostAlwaysBlocking(object, interpreterDevice, logBuilder, sizeOfObject, sizeBatch, offset, eventId);
         }
@@ -841,13 +898,13 @@ public class TornadoVMInterpreter {
                     timeProfiler.setTimer(ProfilerType.COPY_IN_TIME, value);
                 }
             }
-            if (TornadoOptions.PRINT_BYTECODES) {
+            if (TornadoOptions.LOG_BYTECODES()) {
                 DebugInterpreter.logStreamInAtomic(bufferAtomics, interpreterDevice, eventId, logBuilder);
 
             }
         }
 
-        if (TornadoOptions.PRINT_BYTECODES) {
+        if (TornadoOptions.LOG_BYTECODES()) {
             DebugInterpreter.logLaunchTask(task, interpreterDevice, batchThreads, offset, eventId, logBuilder);
         }
 
@@ -878,7 +935,7 @@ public class TornadoVMInterpreter {
 
     private void executeDependency(StringBuilder logBuilder, int lastEvent, int eventId) {
         if (useDependencies && lastEvent != -1) {
-            if (TornadoOptions.PRINT_BYTECODES) {
+            if (TornadoOptions.LOG_BYTECODES()) {
                 DebugInterpreter.logAddDependency(lastEvent, eventId, logBuilder);
             }
             TornadoInternalError.guarantee(eventsIndexes[eventId] < events[eventId].length, "event list is too small");
@@ -888,7 +945,7 @@ public class TornadoVMInterpreter {
     }
 
     private int executeBarrier(StringBuilder logBuilder, int eventId, int[] waitList) {
-        if (TornadoOptions.PRINT_BYTECODES) {
+        if (TornadoOptions.LOG_BYTECODES()) {
             DebugInterpreter.logBarrier(eventId, logBuilder);
         }
 
@@ -980,8 +1037,10 @@ public class TornadoVMInterpreter {
      * Used to track the number of persistent objects and the number of objects
      * that need to be allocated.
      *
-     * @param persistentObjectCount Number of persistent objects that don't need allocation
-     * @param objectsToAlloc Number of objects that need to be allocated
+     * @param persistentObjectCount
+     *     Number of persistent objects that don't need allocation
+     * @param objectsToAlloc
+     *     Number of objects that need to be allocated
      */
     public record ObjectAllocationInfo(int persistentObjectCount, int objectsToAlloc) {
     }

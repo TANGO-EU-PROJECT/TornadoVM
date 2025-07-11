@@ -2,7 +2,7 @@
 # vim: set tasbstop=4
 
 #
-# Copyright (c) 2013-2023, APT Group, Department of Computer Science,
+# Copyright (c) 2013-2023, 2025, APT Group, Department of Computer Science,
 # The University of Manchester.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -162,6 +162,7 @@ __TEST_THE_WORLD__ = [
     TestEntry("uk.ac.manchester.tornado.unittests.instances.TestInstances"),
     TestEntry("uk.ac.manchester.tornado.unittests.matrices.TestMatrixTypes"),
     TestEntry("uk.ac.manchester.tornado.unittests.api.TestAPI"),
+    TestEntry("uk.ac.manchester.tornado.unittests.warmup.TestWarmUp"),
     TestEntry("uk.ac.manchester.tornado.unittests.api.TestInitDataTypes"),
     TestEntry("uk.ac.manchester.tornado.unittests.memory.TestMemoryLimit"),
     TestEntry("uk.ac.manchester.tornado.unittests.api.TestIO"),
@@ -202,6 +203,7 @@ __TEST_THE_WORLD__ = [
     TestEntry("uk.ac.manchester.tornado.unittests.atomics.TestAtomics"),
     TestEntry("uk.ac.manchester.tornado.unittests.compute.ComputeTests"),
     TestEntry("uk.ac.manchester.tornado.unittests.compute.MMwithBytes"),
+    TestEntry("uk.ac.manchester.tornado.unittests.compute.TransformerKernelsTest"),
     TestEntry("uk.ac.manchester.tornado.unittests.dynamic.TestDynamic"),
     TestEntry("uk.ac.manchester.tornado.unittests.vector.api.TestVectorAPI"),
     TestEntry("uk.ac.manchester.tornado.unittests.api.TestConcat"),
@@ -231,7 +233,7 @@ __TEST_THE_WORLD__ = [
               testMethods=["testVirtualDeviceKernel"],
               testParameters=[
                   "-Dtornado.device.desc=" + os.environ["TORNADO_SDK"] + "/examples/virtual-device-GPU.json",
-                  "-Dtornado.print.kernel=True",
+                  "-Dtornado.printKernel=True",
                   "-Dtornado.virtual.device=True",
                   "-Dtornado.print.kernel.dir=" + os.environ["TORNADO_SDK"] + "/virtualKernelOut.out"]),
     TestEntry(testName="uk.ac.manchester.tornado.unittests.virtual.TestVirtualDeviceFeatureExtraction",
@@ -294,6 +296,7 @@ __TORNADO_TESTS_WHITE_LIST__ = [
     "uk.ac.manchester.tornado.unittests.kernelcontext.matrices.TestMatrixMultiplicationKernelContext#mxm1DKernelContext",
     "uk.ac.manchester.tornado.unittests.kernelcontext.matrices.TestMatrixMultiplicationKernelContext#mxm2DKernelContext01",
     "uk.ac.manchester.tornado.unittests.kernelcontext.matrices.TestMatrixMultiplicationKernelContext#mxm2DKernelContext02",
+    "uk.ac.manchester.tornado.unittests.compute.TransformerKernelsTest#testReductionOneBlockWithLayer",
 
     ## Inconsistent timing metrics for data Transfers, triggering difference in copy once vs copy always
     "uk.ac.manchester.tornado.unittests.api.TestIO#testCopyInWithDevice",
@@ -356,7 +359,7 @@ __MAIN_TORNADO_JUNIT_MODULE__ = " junit/"
 __MAIN_TORNADO_JUNIT__ = "org.junit.runner.JUnitCore "
 __IGV_OPTIONS__ = "-Dgraal.Dump=*:verbose -Dgraal.PrintGraph=Network -Dgraal.PrintBackendCFG=true "
 __IGV_LAST_PHASE__ = "-Dgraal.Dump=*:1 -Dgraal.PrintGraph=Network -Dgraal.PrintBackendCFG=true -Dtornado.debug.lowtier=True "
-__PRINT_OPENCL_KERNEL__ = "-Dtornado.print.kernel=True "
+__PRINT_OPENCL_KERNEL__ = "-Dtornado.printKernel=True "
 __DEBUG_TORNADO__ = "-Dtornado.debug=True "
 __TORNADOVM_FULLDEBUG__ = __DEBUG_TORNADO__ + "-Dtornado.fullDebug=True "
 __THREAD_INFO__ = "-Dtornado.threadInfo=True "
@@ -376,7 +379,7 @@ else:
 
 ENABLE_ASSERTIONS = "-ea "
 
-__VERSION__ = "1.1.0"
+__VERSION__ = "1.1.2-dev"
 
 try:
     javaHome = os.environ["JAVA_HOME"]
@@ -746,7 +749,8 @@ def parseArguments():
                         help="Enable the Debug mode in Tornado")
     parser.add_argument('--fullDebug', action="store_true", dest="fullDebug", default=False,
                         help="Enable the Full Debug mode. This mode is more verbose compared to --debug only")
-    parser.add_argument('--live', "-l", action="store_true", dest="live_mode", default=False, help="Visualize output in live mode (no wait)")
+    parser.add_argument('--live', "-l", action="store_true", dest="live_mode", default=False,
+                        help="Visualize output in live mode (no wait)")
     parser.add_argument('--quickPass', "-qp", action="store_true", dest="quickPass", default=False,
                         help="Quick pass without stress memory and output for logs in a file.")
     parser.add_argument('--device', dest="device", default=None, help="Set an specific device. E.g `s0.t0.device=0:1`")
