@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2023, APT Group, Department of Computer Science,
+ * Copyright (c) 2025, APT Group, Department of Computer Science,
  * The University of Manchester.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,18 +15,23 @@
  * limitations under the License.
  *
  */
-package uk.ac.manchester.tornado.api.exceptions;
+package uk.ac.manchester.tornado.api.plan.types;
 
-public class TornadoTaskRuntimeException extends RuntimeException {
+import uk.ac.manchester.tornado.api.ExecutionPlanType;
+import uk.ac.manchester.tornado.api.TornadoExecutionPlan;
 
-    static final String RESET = "\u001B[0m";
-    static final String RED = "\u001B[31m";
+public final class WithWarmUpIterations extends ExecutionPlanType {
 
-    public TornadoTaskRuntimeException(final String msg) {
-        super(RED + msg + RESET);
+    private final long iterations;
+
+    public WithWarmUpIterations(TornadoExecutionPlan parentNode, long iterations) {
+        super(parentNode);
+        this.iterations = iterations;
     }
 
-    public TornadoTaskRuntimeException(final String msg, Exception e) {
-        super(RED + msg + RESET, e);
+    @Override
+    public String toString() {
+        return super.toString() + "\n -> withWarmUpIterations( " + iterations + " ms)";
     }
+
 }
