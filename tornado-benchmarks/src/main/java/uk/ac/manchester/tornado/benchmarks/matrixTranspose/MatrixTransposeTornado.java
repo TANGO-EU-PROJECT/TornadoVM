@@ -86,7 +86,7 @@ public class MatrixTransposeTornado extends BenchmarkDriver {
         taskGraph.transferToHost(DataTransferMode.EVERY_EXECUTION, b);
 
         executionPlan = new TornadoExecutionPlan(taskGraph.snapshot());
-        executionPlan.withWarmUp();
+        executionPlan.withPreCompilation();
     }
 
     @Override

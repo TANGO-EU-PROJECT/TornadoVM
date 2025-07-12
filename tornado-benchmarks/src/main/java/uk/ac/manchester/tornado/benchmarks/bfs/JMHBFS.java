@@ -90,7 +90,7 @@ public class JMHBFS {
             ImmutableTaskGraph immutableTaskGraph = taskGraph.snapshot();
             executor = new TornadoExecutionPlan(immutableTaskGraph);
             executor.withDefaultScheduler() //
-                    .withWarmUp();
+                    .withPreCompilation();
         }
     }
 

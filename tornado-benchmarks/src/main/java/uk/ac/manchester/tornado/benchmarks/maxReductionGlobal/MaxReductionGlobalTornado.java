@@ -78,7 +78,7 @@ public class MaxReductionGlobalTornado extends BenchmarkDriver {
 
         immutableTaskGraph = taskGraph.snapshot();
         executionPlan = new TornadoExecutionPlan(immutableTaskGraph);
-        executionPlan.withGridScheduler(gridScheduler).withWarmUp();
+        executionPlan.withGridScheduler(gridScheduler).withPreCompilation();
     }
 
     @Override

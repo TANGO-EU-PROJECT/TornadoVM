@@ -74,7 +74,7 @@ public class BFSTornado extends BenchmarkDriver {
         immutableTaskGraph = taskGraph.snapshot();
         executionPlan = new TornadoExecutionPlan(immutableTaskGraph);
         executionPlan.withDefaultScheduler() //
-                .withWarmUp();
+                .withPreCompilation();
     }
 
     @Override

@@ -95,7 +95,7 @@ public class JMHMaxReductionGlobal {
 
             ImmutableTaskGraph immutableTaskGraph = taskGraph.snapshot();
             TornadoExecutionPlan executionPlan = new TornadoExecutionPlan(immutableTaskGraph);
-            executionPlan.withGridScheduler(gridScheduler).withWarmUp();
+            executionPlan.withGridScheduler(gridScheduler).withPreCompilation();
         }
     }
 

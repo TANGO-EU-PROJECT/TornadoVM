@@ -91,7 +91,7 @@ public class JMHMatrixAddition {
 
             ImmutableTaskGraph immutableTaskGraph = taskGraph.snapshot();
             executor = new TornadoExecutionPlan(immutableTaskGraph);
-            executor.withWarmUp();
+            executor.withPreCompilation();
 
         }
     }

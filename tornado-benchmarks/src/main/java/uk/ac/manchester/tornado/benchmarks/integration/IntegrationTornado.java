@@ -67,7 +67,7 @@ public class IntegrationTornado extends BenchmarkDriver {
 
         immutableTaskGraph = taskGraph.snapshot();
         executionPlan = new TornadoExecutionPlan(immutableTaskGraph);
-        executionPlan.withDefaultScheduler().withWarmUp();
+        executionPlan.withDefaultScheduler().withPreCompilation();
     }
 
     @Override

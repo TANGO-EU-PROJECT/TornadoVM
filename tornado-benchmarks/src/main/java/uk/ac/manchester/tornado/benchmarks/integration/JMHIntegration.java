@@ -88,7 +88,7 @@ public class JMHIntegration {
 
             ImmutableTaskGraph immutableTaskGraph = taskGraph.snapshot();
             TornadoExecutionPlan executionPlan = new TornadoExecutionPlan(immutableTaskGraph);
-            executionPlan.withDefaultScheduler().withWarmUp();
+            executionPlan.withDefaultScheduler().withPreCompilation();
         }
     }
 
