@@ -48,6 +48,11 @@ public class Histogram {
     private static IntArray histDataTornado;
     private static IntArray histDataJava;
 
+    private static long javaStartTime;
+    private static long javaEndTime;
+    private static long tornadoStartTime;
+    private static long tornadoEndTime;
+
     public Histogram(int size, int numberOfBins) {
         int[] inputData = createDataPoints(size, numberOfBins);
         setInputs(inputData, numberOfBins);
@@ -124,14 +129,13 @@ public class Histogram {
         TornadoExecutionPlan executionPlan = new TornadoExecutionPlan(taskGraph.snapshot());
 
         // 3. Execute the plan - histogram with TornadoVM
-        long start = System.nanoTime();
+        tornadoStartTime = System.nanoTime();
         try (executionPlan) {
             executionPlan.withGridScheduler(gridScheduler).execute();
         } catch (TornadoExecutionPlanException e) {
             throw new RuntimeException(e);
         }
-        long end = System.nanoTime();
-        System.out.println("Total time of TornadoVM execution: " + (end - start) + " (nanoseconds)");
+        tornadoEndTime = System.nanoTime();
 
         return histDataTornado;
     }
@@ -140,13 +144,19 @@ public class Histogram {
         // Run histogram in Java
         KernelContext context = new KernelContext();
 
-        long start = System.nanoTime();
+        javaStartTime = System.nanoTime();
         histogram(context, dataPoints, histDataJava);
-        long end = System.nanoTime();
-
-        System.out.println("Total time of Java execution: " + (end - start) + " (nanoseconds)");
+        javaEndTime = System.nanoTime();
 
         return histDataJava;
+    }
+
+    public static void reportTornadoExecutionTime() {
+        System.out.println("Total time of Java execution: " + (tornadoEndTime - tornadoStartTime) + " (nanoseconds)");
+    }
+
+    public static void reportJavaExecutionTime() {
+        System.out.println("Total time of Java execution: " + (javaEndTime - javaStartTime) + " (nanoseconds)");
     }
 
     public static int[] fromList(List<Integer> list) {
