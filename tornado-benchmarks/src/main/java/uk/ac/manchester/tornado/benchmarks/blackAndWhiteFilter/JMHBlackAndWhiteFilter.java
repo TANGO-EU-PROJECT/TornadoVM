@@ -83,7 +83,7 @@ public class JMHBlackAndWhiteFilter {
 
             ImmutableTaskGraph immutableTaskGraph = taskGraph.snapshot();
             executor = new TornadoExecutionPlan(immutableTaskGraph);
-            executor.withDefaultScheduler().withWarmUp();
+            executor.withDefaultScheduler().withPreCompilation();
         }
     }
 

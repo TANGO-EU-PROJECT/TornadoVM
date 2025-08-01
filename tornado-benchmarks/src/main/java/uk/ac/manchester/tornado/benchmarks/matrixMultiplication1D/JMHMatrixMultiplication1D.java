@@ -89,7 +89,7 @@ public class JMHMatrixMultiplication1D {
 
             ImmutableTaskGraph immutableTaskGraph = taskGraph.snapshot();
             executor = new TornadoExecutionPlan(immutableTaskGraph);
-            executor.withWarmUp();
+            executor.withPreCompilation();
 
         }
     }

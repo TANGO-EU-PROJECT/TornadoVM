@@ -82,7 +82,7 @@ public class HistogramTornado extends BenchmarkDriver {
         gridScheduler = new GridScheduler("benchmark.t0", workerGrid);
         immutableTaskGraph = taskGraph.snapshot();
         executionPlan = new TornadoExecutionPlan(immutableTaskGraph);
-        executionPlan.withWarmUp().withGridScheduler(gridScheduler);
+        executionPlan.withPreCompilation().withGridScheduler(gridScheduler);
     }
 
     @Override
@@ -91,7 +91,7 @@ public class HistogramTornado extends BenchmarkDriver {
         IntArray outputJava = new IntArray(size);
 
         executionPlan.withDevice(device) //
-                .withWarmUp() //
+                .withPreCompilation() //
                 .withGridScheduler(gridScheduler) //
                 .execute();
 

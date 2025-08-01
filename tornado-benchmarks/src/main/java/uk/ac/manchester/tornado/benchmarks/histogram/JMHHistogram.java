@@ -94,7 +94,7 @@ public class JMHHistogram {
             gridScheduler = new GridScheduler("benchmark.t0", workerGrid);
             ImmutableTaskGraph immutableTaskGraph = taskGraph.snapshot();
             executionPlan = new TornadoExecutionPlan(immutableTaskGraph);
-            executionPlan.withWarmUp().withGridScheduler(gridScheduler);
+            executionPlan.withPreCompilation().withGridScheduler(gridScheduler);
         }
     }
 

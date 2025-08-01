@@ -87,7 +87,7 @@ public class MatrixVectorMultiplicationTornado extends BenchmarkDriver {
         taskGraph.transferToHost(DataTransferMode.EVERY_EXECUTION, c);
 
         executionPlan = new TornadoExecutionPlan(taskGraph.snapshot());
-        executionPlan.withWarmUp();
+        executionPlan.withPreCompilation();
     }
 
     @Override
