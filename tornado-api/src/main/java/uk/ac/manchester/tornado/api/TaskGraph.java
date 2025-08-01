@@ -703,6 +703,12 @@ public class TaskGraph implements TaskGraphInterface {
         return this;
     }
 
+    @Override
+    public TaskGraph consumeFromDevice(Object... objects) {
+        taskGraphImpl.consumeFromDevice(this.taskGraphName, objects);
+        return this;
+    }
+
     /**
      * Tag a set of objects (Java objects) to be transferred from the device to the
      * host after the execution completes. There are two modes:
@@ -798,8 +804,8 @@ public class TaskGraph implements TaskGraphInterface {
         taskGraphImpl.execute(executionPackage).waitOn();
     }
 
-    void warmup(ExecutorFrame executionPackage) {
-        taskGraphImpl.warmup(executionPackage);
+    void withPreCompilation(ExecutorFrame executionPackage) {
+        taskGraphImpl.withPreCompilation(executionPackage);
     }
 
     void dumpProfiles() {
@@ -945,8 +951,8 @@ public class TaskGraph implements TaskGraphInterface {
         taskGraphImpl.mapOnDeviceMemoryRegion(destArray, srcArray, offset, taskGraphSrc);
     }
 
-    void updatePersistedObjectState(TornadoTaskGraphInterface taskGraphSrc) {
-        taskGraphImpl.updatePersistedObjectState(taskGraphSrc);
+    void setLastExecutedTaskGraph(TornadoTaskGraphInterface lastExecutedTaskGraph) {
+        taskGraphImpl.setLastExecutedTaskGraph(lastExecutedTaskGraph);
     }
 
     public Collection<?> getOutputs() {
@@ -960,4 +966,5 @@ public class TaskGraph implements TaskGraphInterface {
     public boolean isGridRegistered() {
         return taskGraphImpl.isGridRegistered();
     }
+
 }

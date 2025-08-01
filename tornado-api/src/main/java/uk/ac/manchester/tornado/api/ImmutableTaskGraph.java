@@ -50,8 +50,8 @@ public class ImmutableTaskGraph {
         this.taskGraph.execute(executionPackage);
     }
 
-    void warmup(ExecutorFrame executionPackage) {
-        taskGraph.warmup(executionPackage);
+    void withPreCompilation(ExecutorFrame executionPackage) {
+        taskGraph.withPreCompilation(executionPackage);
     }
 
     void withDevice(TornadoDevice device) {
@@ -222,8 +222,8 @@ public class ImmutableTaskGraph {
         taskGraph.mapOnDeviceMemoryRegion(destArray, srcArray, offset, taskGraphSrc.taskGraph.taskGraphImpl);
     }
 
-    void updatePersistedObjectState(ImmutableTaskGraph taskGraphSrc) {
-        taskGraph.updatePersistedObjectState(taskGraphSrc.taskGraph.taskGraphImpl);
+    void setLastExecutedTaskGraph(ImmutableTaskGraph lastExecutedTaskGraph) {
+        taskGraph.setLastExecutedTaskGraph(lastExecutedTaskGraph.taskGraph.taskGraphImpl);
     }
 
     boolean isGridRegistered() {

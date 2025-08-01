@@ -20,7 +20,9 @@ package uk.ac.manchester.tornado.api;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import uk.ac.manchester.tornado.api.common.TornadoDevice;
 import uk.ac.manchester.tornado.api.enums.TornadoVMBackendType;
@@ -56,8 +58,19 @@ class TornadoExecutor {
         return checkGridRegistered;
     }
 
-    void warmup(ExecutorFrame executorFrame) {
-        immutableTaskGraphList.forEach(immutableTaskGraph -> immutableTaskGraph.warmup(executorFrame));
+    void updateLastExecutedTaskGraph() {
+        ImmutableTaskGraph last = immutableTaskGraphList.getLast();
+        immutableTaskGraphList.forEach(immutableTaskGraph -> immutableTaskGraph.setLastExecutedTaskGraph(immutableTaskGraphList.getLast()));
+
+        if (subgraphList != null) {
+            for (ImmutableTaskGraph immutableTaskGraph : subgraphList) {
+                immutableTaskGraph.setLastExecutedTaskGraph(last);
+            }
+        }
+    }
+
+    void withPreCompilation(ExecutorFrame executorFrame) {
+        immutableTaskGraphList.forEach(immutableTaskGraph -> immutableTaskGraph.withPreCompilation(executorFrame));
     }
 
     void withBatch(String batchSize) {
@@ -251,17 +264,13 @@ class TornadoExecutor {
             throw new TornadoRuntimeException("Error: graphIndex out of bounds: " + graphIndex);
         }
 
-        // Retrieve the list of persisted task names from the specified subgraph
-        List<String> namesList = new ArrayList<>(subgraphList.get(graphIndex).getTaskGraph().taskGraphImpl.getPersistedTaskToObjectsMap().keySet());
+        // Store the selected graph before clearing the list
+        ImmutableTaskGraph selectedGraph = subgraphList.get(graphIndex);
 
-        // Determine the safe iteration limit to avoid IndexOutOfBoundsException
-        int limit = Math.min(graphIndex, namesList.size());
+        // Clear and update the immutableTaskGraphList
+        immutableTaskGraphList.clear();
+        Collections.addAll(immutableTaskGraphList, selectedGraph);
 
-        // Iterate over the namesList and update the persisted object state
-        for (int idx = 0; idx < limit; idx++) {
-            String key = namesList.get(idx);
-            subgraphList.get(graphIndex).updatePersistedObjectState(getGraphByName(key));
-        }
     }
 
     private ImmutableTaskGraph getGraph(int graphIndex) {
@@ -318,5 +327,45 @@ class TornadoExecutor {
             }
         }
         return false;
+    }
+
+    public void withWarmUpTime(long milliseconds, ExecutorFrame executorFrame) throws InterruptedException {
+        AtomicBoolean run = new AtomicBoolean(true);
+
+        // If iterations takes more than the specified amount of milliseconds,
+        // the next run is stopped. This means that the amount if milliseconds
+        // specified is "at least" the time that the warm-up will take.
+        Thread warmUpThread = new Thread(() -> {
+            while (run.get()) {
+                runForWarmUp(executorFrame);
+            }
+        });
+
+        Thread controllerThread = new Thread(() -> {
+            try {
+                Thread.sleep(milliseconds);
+            } catch (InterruptedException e) {
+                throw new TornadoRuntimeException(e);
+            }
+            run.set(false);
+        });
+        warmUpThread.start();
+        controllerThread.start();
+
+        warmUpThread.join();
+        controllerThread.join();
+    }
+
+    private void runForWarmUp(ExecutorFrame executorFrame) {
+        immutableTaskGraphList.forEach(immutableTaskGraph -> {
+            immutableTaskGraph.execute(executorFrame);
+            // Update state for all task-graphs within the execution plan
+            ImmutableTaskGraph last = immutableTaskGraphList.getLast();
+            immutableTaskGraphList.forEach(itg -> itg.setLastExecutedTaskGraph(last));
+        });
+    }
+
+    public void withWarmUpIterations(int iterations, ExecutorFrame executorFrame) {
+        IntStream.range(0, iterations).forEach(iteration -> runForWarmUp(executorFrame));
     }
 }
